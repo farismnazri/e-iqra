@@ -4,6 +4,8 @@
 /Visual_Identity/
 /AGENTS.md
 /IQRA_PROJECT_GUIDE.md
+/docs/
+/PROTOTYPE_REVIEW.md
 
 # Secrets and local environment configuration
 .env
@@ -55,3 +57,17 @@ Thumbs.db
 
 # Commit the package manager lockfile once a package manager is chosen.
 # Do not globally ignore images, audio, Markdown, or content files.
+
+# Additional tool caches and OS metadata
+.parcel-cache/
+.sass-cache/
+.stylelintcache
+.npm/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.AppleDouble/
+.LSOverride
+._*
+Desktop.ini
+$RECYCLE.BIN/
