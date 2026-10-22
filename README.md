@@ -26,17 +26,18 @@ The app uses Vite, React, TypeScript, React Router, plain CSS and Lucide icons. 
 | Route | Behavior |
 | --- | --- |
 | `/` | Paper cover, Iqra identity and Start Reading |
-| `/chapters` | Chapter 1; resumes the last page opened during this session |
-| `/learn?page=1` | Two deterministic draft pages; reversible confidence ticks, disabled Sound, page picker and visited-page-only review |
+| `/chapters` | Six-book library; Chapter 1 resumes this session, Chapters 2–6 show coming-soon dialogs |
+| `/learn?page=1` | 24 deterministic draft pages; reversible confidence ticks, disabled Sound, page picker and visited-page-only review |
 | `/learn/write?page=1` | Freehand canvas, reference form, Clear, Next Letter and Back to Reading |
 
-A first exercise takes two taps: Start Reading → Start Chapter. Reading uses right item → left item → next row on wide screens; phones below 651px preserve that source order in one column. Each exercise has only Sound and Tick; Write is page-level.
+A first exercise takes two taps: Start Reading → Iqra 1. Reading uses right item → left item → next row on wide screens; phones below 651px preserve that source order in one column. Each exercise has only Sound and Tick; Write is page-level.
 
 All progress is **in-memory and temporary**: ticks and chapter resume survive navigation, but reload resets them. Drawings disappear when leaving Write or changing its reference form. Returning from Write restores the reader page, scroll and focus, preserving ticks. The page query parameter remains usable on direct visits or reloads.
 
 ## Content and implementation boundaries
 
-- Only Alif and Ba with fathah appear in these original, unreviewed UI samples. Separated sequences are practice units, not Quran quotations. The proposed three-vowel curriculum expansion has not been assumed approved.
+- The owner explicitly adopted the three-vowel Chapter 1 plan on 22 October 2026, superseding the earlier fathah-only scope. The draft has 24 pages / 240 exercises: ten teaching blocks plus cumulative review, covering the Alif-labelled group and 19 light consonants with fathah, kasrah and dammah (60 forms). Each form is introduced alone before separated/unjoined sequences. These drills are not Quran quotations. Heavy letters, Ra, joining and advanced marks remain deferred.
+- Unchanged exercises retain their IDs; changed/new exercises use deterministic `v3-eNN` IDs under stable page IDs. Confidence state must never be reassigned by exercise position. Curriculum version and unreviewed status are recorded in `src/content.ts`.
 - Reference and tracing forms are explicitly draft/unreviewed. Qualified teacher review and owner approval remain required before educational publication.
 - Sound stays disabled because there are no approved recordings. There is no TTS fallback. Page sounds remain off; no sound assets or toggle are supplied in this version.
 - No account invitation, authentication, admin tools, persistent storage, PWA installation or later-chapter content is implemented.

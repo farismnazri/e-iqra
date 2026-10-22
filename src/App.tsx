@@ -28,24 +28,41 @@ function Landing() {
 }
 
 function Chapters() {
-  const { lastPage, visited } = usePrototype()
-  const started = visited.length > 0
+  const { lastPage } = usePrototype()
+  const [comingSoon, setComingSoon] = useState<number | null>(null)
+  const dialog = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    if (comingSoon !== null && !dialog.current?.open) dialog.current?.showModal()
+  }, [comingSoon])
+
+  function bookCover(chapter: number) {
+    return <span className="book-cover-inner" aria-hidden="true">
+      <Rosette /><span className="book-title">Iqra</span><span className="book-number">{chapter}</span>
+      <Divider /><span className="book-landscape" /><Leaves />
+    </span>
+  }
+
   return <main id="main" className="paper-frame chapters">
     <FrameDecoration />
     <Link className="back-link" to="/"><ArrowLeft size={18} /> Back to Iqra</Link>
-    <header className="chapter-heading"><Rosette /><h1 tabIndex={-1}>Choose a chapter</h1><Divider /><p>One page at a time. Begin wherever you are.</p></header>
-    <div className="chapter-selection">
-      <div className="book-cover" aria-hidden="true"><div className="book-cover-inner"><Rosette /><span>Iqra</span><strong>1</strong><Divider /><Leaves /></div></div>
-      <section className="chapter-details">
-        <p className="eyebrow">Your first pages</p><h2>Chapter 1</h2><p className="chapter-description">A gentle start with Arabic letters.</p>
-        <p className="chapter-meta">2 draft sample pages{started ? ` · Last opened: page ${lastPage + 1}` : ''}</p>
-        <Link className="button button-primary" to={`/learn?page=${lastPage + 1}`}>{started ? 'Continue Reading' : 'Start Chapter'}<ChevronRight size={20} /></Link>
-        <p className="quiet-note">No account needed. Ticks last until you reload.</p>
-      </section>
-    </div>
-    <div className="shelf" aria-hidden="true" />
-    <p className="future-note"><BookOpen size={18} /> Further chapters are unavailable in this prototype.</p>
-    <DraftNote />
+    <header className="chapter-heading"><Rosette /><h1 tabIndex={-1}>Choose a chapter</h1><Divider /></header>
+    <ol className="chapter-library" aria-label="Iqra books">
+      {[1, 2, 3, 4, 5, 6].map(chapter => <li key={chapter} className="library-slot">
+        {chapter === 1
+          ? <Link className="library-book book-1" to={`/learn?page=${lastPage + 1}`} aria-label="Iqra 1">{bookCover(chapter)}</Link>
+          : <button className={`library-book book-${chapter}`} type="button" aria-label={`Iqra ${chapter}`} aria-haspopup="dialog" onClick={() => setComingSoon(chapter)}>{bookCover(chapter)}</button>}
+      </li>)}
+    </ol>
+    <dialog ref={dialog} className="coming-soon-dialog" aria-labelledby="coming-soon-title" aria-describedby="coming-soon-description" onClose={() => setComingSoon(null)} onClick={event => {
+      if (event.target !== event.currentTarget) return
+      const bounds = event.currentTarget.getBoundingClientRect()
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close()
+    }}>
+      <Rosette /><h2 id="coming-soon-title">Coming soon</h2>
+      <p id="coming-soon-description">Chapter {comingSoon} is being prepared. Come back soon!</p>
+      <button className="button button-primary" type="button" autoFocus onClick={() => dialog.current?.close()}>Back to library</button>
+    </dialog>
   </main>
 }
 
@@ -100,33 +117,30 @@ function Reader() {
     <FrameDecoration />
     <div className="reader-toolbar">
       <Link className="back-link" to="/chapters"><ChevronLeft size={20} /><span>Back to Chapters</span></Link>
-      <div className="reader-identity"><h1 id="reader-title" tabIndex={-1}>Chapter 1</h1><Divider /><p>Page {index + 1} <span>of {pages.length}</span></p></div>
+      <div className="reader-identity"><h1 id="reader-title" tabIndex={-1}>Chapter 1</h1><Divider /></div>
       <Link id="write-action" className="button button-primary write-button" to={`/learn/write?page=${index + 1}`} onClick={() => { readingReturn.current = { page: index, scrollY: window.scrollY, focusId: 'write-action' } }}><Pencil size={18} /> Write</Link>
     </div>
-    <div className="page-introduction"><p className="eyebrow">{page.title}</p><p>{page.goal}</p></div>
-    <DraftNote />
-    <p id="audio-note" className="audio-note">Approved audio is unavailable. You can still read and tick.</p>
+    <div className="sr-only"><p>{page.title}. {page.goal}</p><p>Draft curriculum, pending qualified teacher review.</p><p id="audio-note">Approved audio is unavailable. You can still read and tick.</p></div>
     <section key={page.id} className="reading-sheet" aria-label={`Draft exercises, page ${index + 1}`}>
       <ol className="exercise-grid">
         {page.exercises.map((exercise, i) => <li key={exercise.id} id={exercise.id} tabIndex={-1} className="exercise" onFocus={() => { currentExercise.current = exercise.id }}>
           <span className="exercise-number" aria-label={`Exercise ${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
-          <span className="arabic exercise-arabic" lang="ar" dir="rtl">{exercise.units.map(id => units[id].text).join(' ')}</span>
+          <span className="arabic exercise-arabic" lang="ar" dir="rtl">{exercise.units.map((id, unitIndex) => <span key={`${id}-${unitIndex}`}>{units[id].text}{unitIndex < exercise.units.length - 1 ? ' ' : ''}</span>)}</span>
           <div className="exercise-actions">
             <button className="exercise-control sound-control" disabled={audio.status === 'unavailable'} aria-describedby="audio-note" aria-label={`Sound for exercise ${i + 1}: approved audio unavailable`}><span className="round-icon"><Play size={15} fill="currentColor" /></span>Sound</button>
             <button className={`exercise-control tick-control ${ticks[exercise.id] === 'checked' ? 'is-checked' : ''}`} aria-pressed={ticks[exercise.id] === 'checked'} aria-label={`Tick exercise ${i + 1}`} onClick={() => toggle(exercise.id)}><span className="round-icon"><Check size={19} /></span>{ticks[exercise.id] === 'checked' ? 'Ticked' : 'Tick'}</button>
           </div>
         </li>)}
       </ol>
-      <p className="sheet-footnote"><span className="wide-order">Read from right to left, then move to the next row.</span><span className="phone-order">Read down the page, one exercise at a time.</span><span>Separated practice units · Not Quran quotations</span></p>
+      <p className="sheet-footnote sr-only"><span className="wide-order">Read from right to left, then move to the next row.</span><span className="phone-order">Read down the page, one exercise at a time.</span><span>Separated practice units · Not Quran quotations</span></p>
     </section>
     <nav className="page-navigation" aria-label="Workbook pages">
-      <button className="button button-paper" disabled={index === 0} onClick={() => goToPage(index - 1)}><ChevronLeft size={19} /><span>Previous Page</span></button>
-      <label className="page-picker"><span className="sr-only">Choose page</span><select aria-label="Choose page" value={index} onChange={e => goToPage(Number(e.target.value))}>{pages.map((p,i) => <option key={p.id} value={i}>Page {i + 1} of {pages.length}</option>)}</select></label>
-      <button className="button button-primary" disabled={index === pages.length - 1} onClick={() => goToPage(index + 1)}><span>Next Page</span><ChevronRight size={19} /></button>
+      <button className="button button-primary next-page" disabled={index === pages.length - 1} onClick={() => goToPage(index + 1)}><ChevronLeft size={19} /><span>Next Page</span></button>
+      <button className="next-practice" onClick={nextPractice}><BookOpen size={19} /> Go to next practice</button>
+      <button className="button button-paper previous-page" disabled={index === 0} onClick={() => goToPage(index - 1)}><span>Previous Page</span><ChevronRight size={19} /></button>
     </nav>
-    <button className="next-practice" onClick={nextPractice}><BookOpen size={19} /> Go to next practice <ChevronRight size={17} /></button>
+    <label className="page-picker"><span className="sr-only">Choose page</span><select aria-label="Choose page" value={index} onChange={e => goToPage(Number(e.target.value))}>{pages.map((p,i) => <option key={p.id} value={i}>Page {i + 1} of {pages.length}</option>)}</select></label>
     <p className="review-message" role="status">{reviewMessage}</p>
-    <p className="quiet-note reader-note">Ticks are your own confidence check. You can change them anytime.</p>
   </main>
 }
 
@@ -166,6 +180,6 @@ export function App() {
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
     <div className="app-shell"><Routes><Route path="/" element={<Landing />} /><Route path="/chapters" element={<Chapters />} /><Route path="/learn" element={<Reader />} /><Route path="/learn/write" element={<Write />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></div>
-    <footer className="prototype-footer"><span>Iqra · Prototype v0.1</span><span>Unpublished · Temporary local state · Page sounds off</span></footer>
+    {location.pathname !== '/chapters' && location.pathname !== '/learn' && <footer className="prototype-footer"><span>Iqra · Prototype v0.1</span><span>Unpublished · Temporary local state · Page sounds off</span></footer>}
   </>
 }
