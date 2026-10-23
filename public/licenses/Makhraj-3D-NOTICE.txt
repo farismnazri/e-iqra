@@ -1,0 +1,29 @@
+Makhraj 3D — adapted procedural anatomy and articulation poses
+Source: https://makhraj3d.ebooksunnah.com/
+Creator/contact supplied with the source: ms@ebooksunnah.com
+Source excerpts supplied by the e-Iqra owner on 23 October 2026.
+
+Adapted files:
+  geometri.js -> src/articulation/model/geometry.js
+  anatomi.js -> src/articulation/model/anatomy.js
+  tekstur.js -> src/articulation/model/textures.js
+  data-huruf.js -> src/articulation/letterPoses.ts (pose/landmark subset)
+Original app.js was inspected but its interface, audio, analytics, service worker,
+and instructional sequence were not integrated. e-Iqra supplies a new renderer
+and React modal. Original anatomical coordinates, pose keys and spring system
+are retained. All learner-facing labels are in English.
+
+The supplied data-huruf.js credits the ebook "Makharijul Huruf dan
+Sifat-Sifatnya", Qothrunnadaa Learning Centre, revised edition, as its source.
+That credit is preserved here; it does not establish reuse rights for the ebook.
+
+The e-Iqra owner reports permission has been granted. Written terms were not
+included in the supplied ZIP. Before public release, confirm permitted code and
+educational-data reuse/redistribution, modifications, required attribution,
+source-disclosure obligations, and publication/hosting conditions, including
+any underlying educational/illustration rights. No third-party license is
+inferred or granted by this notice. Three.js's MIT license applies to Three.js
+only; see Three-LICENSE.txt.
+
+Articulation mappings and visual anatomy are draft/unreviewed and require
+qualified teacher review before educational publication.

@@ -1,21 +1,45 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { Stroke } from './DrawingCanvas'
+import type { ChapterId } from './chapters'
 
-type Confidence = 'checked' | 'explicitly_unchecked'
-type ReadingContext = { scrollY: number; focusId: string; page: number }
+export type WorkbookMode = 'reading' | 'writing'
+export type ExerciseProgress = { readingChecked: boolean; writingChecked: boolean }
+type ChapterSession = { mode: WorkbookMode; lastPage: number; visited: number[] }
+
 function usePrototypeState() {
-  const [ticks, setTicks] = useState<Record<string, Confidence>>({})
-  const [lastPage, setLastPage] = useState(0)
-  const [visited, setVisited] = useState<number[]>([])
-  const readingReturn = useRef<ReadingContext | null>(null)
-  const visit = useCallback((index: number) => {
-    setLastPage(index)
-    setVisited(previous => previous.includes(index) ? previous : [...previous, index])
+  const [progress, setProgress] = useState<Record<string, ExerciseProgress>>({})
+  const [drawings, setDrawings] = useState<Record<string, Stroke[]>>({})
+  const [sessions, setSessions] = useState<Record<ChapterId, ChapterSession>>({
+    'draft-ch01': { mode: 'reading', lastPage: 0, visited: [] },
+    'draft-ch02': { mode: 'reading', lastPage: 0, visited: [] },
+    'draft-ch03': { mode: 'reading', lastPage: 0, visited: [] },
+  })
+  const visit = useCallback((chapter: ChapterId, index: number) => {
+    setSessions(previous => {
+      const current = previous[chapter]
+      return { ...previous, [chapter]: {
+        ...current, lastPage: index,
+        visited: current.visited.includes(index) ? current.visited : [...current.visited, index],
+      } }
+    })
   }, [])
-  function toggle(id: string) {
-    setTicks(previous => ({ ...previous, [id]: previous[id] === 'checked' ? 'explicitly_unchecked' : 'checked' }))
-  }
-  return { ticks, toggle, lastPage, visited, visit, readingReturn }
+  const setMode = useCallback((chapter: ChapterId, mode: WorkbookMode) => {
+    setSessions(previous => ({ ...previous, [chapter]: { ...previous[chapter], mode } }))
+  }, [])
+  const toggle = useCallback((id: string, activeMode: WorkbookMode) => {
+    const field = activeMode === 'reading' ? 'readingChecked' : 'writingChecked'
+    setProgress(previous => {
+      const current = previous[id] ?? { readingChecked: false, writingChecked: false }
+      // Keep deliberate false values; neither mode can overwrite the other's choice.
+      return { ...previous, [id]: { ...current, [field]: !current[field] } }
+    })
+  }, [])
+  const saveDrawing = useCallback((id: string, strokes: Stroke[]) => {
+    setDrawings(previous => ({ ...previous, [id]: strokes }))
+  }, [])
+  // Exercise IDs include their chapter, keeping ticks and drawings isolated as well.
+  return { progress, toggle, drawings, saveDrawing, sessions, setMode, visit }
 }
 
 const PrototypeContext = createContext<ReturnType<typeof usePrototypeState> | null>(null)

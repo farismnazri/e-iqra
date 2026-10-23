@@ -1,34 +1,35 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react'
-import { pageIndex, pages, units } from './content'
+import { ArrowLeft, BookOpen, Info, Check, ChevronLeft, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react'
+import { pageIndex, units } from './content'
+import { chapterFromParam, chapterParams, chapters } from './chapters'
+import type { Chapter } from './chapters'
 import { audio } from './audio'
 import { usePrototype } from './state'
 import { BookScene, FrameDecoration, Leaves, Rosette } from './Artwork'
 import { DrawingCanvas } from './DrawingCanvas'
+import { PositionalForms } from './PositionalForms'
+import { introductoryLetter } from './articulation/letters'
+import { ArticulationDialog } from './articulation/ArticulationDialog'
 
 function Divider() { return <div className="ornamental-divider" aria-hidden="true"><span />◆<span /></div> }
-function DraftNote() { return <p className="draft-note">Draft samples · Not teacher-reviewed · For prototype review only</p> }
 
 function Landing() {
   return <main id="main" className="paper-frame landing">
     <FrameDecoration />
     <div className="cover-copy">
       <Rosette className="cover-rosette" />
-      <p className="eyebrow">A gentle beginning</p>
-      <h1 tabIndex={-1}>Iqra<span className="arabic brand-arabic" lang="ar" dir="rtl">اقرأ</span></h1>
+      <h1 tabIndex={-1}>e-iqra<span className="arabic brand-arabic" lang="ar" dir="rtl">اقرأ</span></h1>
       <Divider />
       <p className="cover-intro">Learn to read Quranic Arabic,<br />one page at a time.</p>
-      <Link className="button button-primary start-button" to="/chapters">Start Reading <ChevronRight size={22} /></Link>
-      <p className="quiet-note">Free to explore. At your own pace.</p>
+      <Link className="button button-primary start-button" to="/chapters">Start</Link>
     </div>
     <BookScene />
-    <p className="cover-footnote">A reading workbook, made for a quiet moment.</p>
   </main>
 }
 
 function Chapters() {
-  const { lastPage } = usePrototype()
+  const { sessions } = usePrototype()
   const [comingSoon, setComingSoon] = useState<number | null>(null)
   const dialog = useRef<HTMLDialogElement>(null)
 
@@ -48,11 +49,14 @@ function Chapters() {
     <Link className="back-link" to="/"><ArrowLeft size={18} /> Back to Iqra</Link>
     <header className="chapter-heading"><Rosette /><h1 tabIndex={-1}>Choose a chapter</h1><Divider /></header>
     <ol className="chapter-library" aria-label="Iqra books">
-      {[1, 2, 3, 4, 5, 6].map(chapter => <li key={chapter} className="library-slot">
-        {chapter === 1
-          ? <Link className="library-book book-1" to={`/learn?page=${lastPage + 1}`} aria-label="Iqra 1">{bookCover(chapter)}</Link>
-          : <button className={`library-book book-${chapter}`} type="button" aria-label={`Iqra ${chapter}`} aria-haspopup="dialog" onClick={() => setComingSoon(chapter)}>{bookCover(chapter)}</button>}
-      </li>)}
+      {[1, 2, 3, 4, 5, 6].map(chapter => {
+        const available = Object.values(chapters).find(book => book.number === chapter)
+        return <li key={chapter} className="library-slot">
+          {available
+            ? <Link className={`library-book book-${chapter}`} to={`/learn?${chapterParams(available.id, sessions[available.id].lastPage)}`} aria-label={`Iqra ${chapter}`}>{bookCover(chapter)}</Link>
+            : <button className={`library-book book-${chapter}`} type="button" aria-label={`Iqra ${chapter}`} aria-haspopup="dialog" onClick={() => setComingSoon(chapter)}>{bookCover(chapter)}</button>}
+        </li>
+      })}
     </ol>
     <dialog ref={dialog} className="coming-soon-dialog" aria-labelledby="coming-soon-title" aria-describedby="coming-soon-description" onClose={() => setComingSoon(null)} onClick={event => {
       if (event.target !== event.currentTarget) return
@@ -67,24 +71,37 @@ function Chapters() {
 }
 
 function Reader() {
+  const [params] = useSearchParams()
+  const chapter = chapterFromParam(params.get('chapter'))
+  // Reset review/focus cursors when changing chapters, including browser history.
+  return <ChapterReader key={chapter.id} chapter={chapter} />
+}
+
+function ChapterReader({ chapter }: { chapter: Chapter }) {
   const [params, setParams] = useSearchParams()
-  const index = pageIndex(params.get('page'))
+  const pages = chapter.pages
+  const retiredFinalPage = chapter.number === 2 && params.get('page') === '10'
+  const index = pageIndex(retiredFinalPage ? '9' : params.get('page'), pages.length)
   const page = pages[index]
-  const { ticks, toggle, visit, visited, readingReturn } = usePrototype()
+  const positional = 'layout' in page && page.layout === 'positional'
+  const { progress, toggle, drawings, saveDrawing, sessions, setMode, visit } = usePrototype()
+  const { mode, visited } = sessions[chapter.id]
+  const writing = mode === 'writing'
+  const checkedField = writing ? 'writingChecked' : 'readingChecked'
   const [reviewMessage, setReviewMessage] = useState('')
+  const [articulation, setArticulation] = useState<{ letter: NonNullable<ReturnType<typeof introductoryLetter>>; trigger: HTMLButtonElement } | null>(null)
   const currentExercise = useRef<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
+  const pendingScroll = useRef<number | null>(null)
 
-  useEffect(() => { visit(index) }, [index, visit])
+  useEffect(() => {
+    if (retiredFinalPage) setParams(chapterParams(chapter.id, index), { replace: true })
+  }, [retiredFinalPage, chapter.id, index, setParams])
+  useEffect(() => { visit(chapter.id, index) }, [chapter.id, index, visit])
   useLayoutEffect(() => {
     setReviewMessage('')
-    const saved = readingReturn.current
     const frame = requestAnimationFrame(() => {
-      if (saved && saved.page === index) {
-        document.getElementById(saved.focusId)?.focus({ preventScroll: true })
-        window.scrollTo(0, saved.scrollY)
-        readingReturn.current = null
-      } else if (pendingFocus.current) {
+      if (pendingFocus.current) {
         document.getElementById(pendingFocus.current)?.focus()
         pendingFocus.current = null
       } else {
@@ -93,11 +110,23 @@ function Reader() {
       }
     })
     return () => cancelAnimationFrame(frame)
-  }, [index, readingReturn])
+  }, [index])
+
+  useLayoutEffect(() => {
+    if (pendingScroll.current === null) return
+    window.scrollTo(0, pendingScroll.current)
+    pendingScroll.current = null
+  }, [mode])
+
+  function toggleMode() {
+    pendingScroll.current = window.scrollY
+    setReviewMessage('')
+    setMode(chapter.id, writing ? 'reading' : 'writing')
+  }
 
   function goToPage(next: number) {
     currentExercise.current = null
-    setParams({ page: String(next + 1) })
+    setParams(chapterParams(chapter.id, next))
   }
   function nextPractice() {
     setReviewMessage('')
@@ -106,33 +135,51 @@ function Reader() {
     const currentPageStart = candidates.findIndex(e => e.page === index)
     const offset = start >= 0 ? start + 1 : Math.max(0, currentPageStart)
     const ordered = [...candidates.slice(offset), ...candidates.slice(0, offset)]
-    const next = ordered.find(e => ticks[e.id] !== 'checked')
-    if (!next) { setReviewMessage("No unchecked practices on the pages you've visited."); return }
+    const next = ordered.find(e => !progress[e.id]?.[checkedField])
+    if (!next) { setReviewMessage(`No unchecked ${mode} practices on the pages you've visited.`); return }
     currentExercise.current = next.id
     if (next.page === index) document.getElementById(next.id)?.focus()
-    else { pendingFocus.current = next.id; setParams({ page: String(next.page + 1) }) }
+    else { pendingFocus.current = next.id; setParams(chapterParams(chapter.id, next.page)) }
   }
 
-  return <main id="main" className="paper-frame reader">
+  return <main id="main" className={`paper-frame reader${writing ? ' is-writing' : ''}`}>
     <FrameDecoration />
     <div className="reader-toolbar">
       <Link className="back-link" to="/chapters"><ChevronLeft size={20} /><span>Back to Chapters</span></Link>
-      <div className="reader-identity"><h1 id="reader-title" tabIndex={-1}>Chapter 1</h1><Divider /></div>
-      <Link id="write-action" className="button button-primary write-button" to={`/learn/write?page=${index + 1}`} onClick={() => { readingReturn.current = { page: index, scrollY: window.scrollY, focusId: 'write-action' } }}><Pencil size={18} /> Write</Link>
+      <div className="reader-identity"><h1 id="reader-title" tabIndex={-1}>Chapter {chapter.number}</h1><Divider /></div>
+      <button id="write-action" className="button button-primary write-button" aria-pressed={writing} aria-controls="workbook-sheet" onClick={toggleMode}>{writing ? <Check size={18} /> : <Pencil size={18} />}{writing ? 'Done' : 'Write'}</button>
     </div>
     <div className="sr-only"><p>{page.title}. {page.goal}</p><p>Draft curriculum, pending qualified teacher review.</p><p id="audio-note">Approved audio is unavailable. You can still read and tick.</p></div>
-    <section key={page.id} className="reading-sheet" aria-label={`Draft exercises, page ${index + 1}`}>
-      <ol className="exercise-grid">
-        {page.exercises.map((exercise, i) => <li key={exercise.id} id={exercise.id} tabIndex={-1} className="exercise" onFocus={() => { currentExercise.current = exercise.id }}>
+    <p className="sr-only" role="status">{writing ? 'Writing mode. Draft tracing references, not teacher-reviewed. Tick and Clear are independent; handwriting is kept only until reload. Scroll outside the drawing areas.' : 'Reading mode.'}</p>
+    {chapter.number === 3 && <div className="chapter3-note">
+      <p>Educational draft · Pending qualified teacher review</p>
+      {positional && <p>Compare shapes from right to left. Unvowelled letters are shape references only.</p>}
+      {index === 6 && <p>Alif reading examples use the familiar hamzah-on-alif short-vowel spelling.</p>}
+      {index === 11 && <p>Optional, ungraded mixed reading review.</p>}
+    </div>}
+    <section id="workbook-sheet" key={page.id} className="reading-sheet" aria-label={`Draft ${mode} exercises, page ${index + 1}`}>
+      <ol className={`exercise-grid${positional ? ' positional-grid' : ''}`}>
+        {page.exercises.map((exercise, i) => {
+          const letter = 'units' in exercise ? introductoryLetter(exercise) : null
+          return <li key={exercise.id} id={exercise.id} tabIndex={-1} className={`exercise${!writing && letter ? ' has-letter-info' : ''}`} onFocus={() => { currentExercise.current = exercise.id }}>
           <span className="exercise-number" aria-label={`Exercise ${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
-          <span className="arabic exercise-arabic" lang="ar" dir="rtl">{exercise.units.map((id, unitIndex) => <span key={`${id}-${unitIndex}`}>{units[id].text}{unitIndex < exercise.units.length - 1 ? ' ' : ''}</span>)}</span>
-          <div className="exercise-actions">
-            <button className="exercise-control sound-control" disabled={audio.status === 'unavailable'} aria-describedby="audio-note" aria-label={`Sound for exercise ${i + 1}: approved audio unavailable`}><span className="round-icon"><Play size={15} fill="currentColor" /></span>Sound</button>
-            <button className={`exercise-control tick-control ${ticks[exercise.id] === 'checked' ? 'is-checked' : ''}`} aria-pressed={ticks[exercise.id] === 'checked'} aria-label={`Tick exercise ${i + 1}`} onClick={() => toggle(exercise.id)}><span className="round-icon"><Check size={19} /></span>{ticks[exercise.id] === 'checked' ? 'Ticked' : 'Tick'}</button>
+          {!writing && letter && <button type="button" className="letter-info" aria-label={`Pronunciation information for ${letter.name}, exercise ${i + 1}`} aria-haspopup="dialog" onClick={event => setArticulation({ letter, trigger: event.currentTarget })}><Info size={16} /></button>}
+          <div className="exercise-practice">
+            {'units' in exercise
+              ? <span className="arabic exercise-arabic" lang="ar" dir="rtl">{exercise.units.map((id, unitIndex) => <span key={`${id}-${unitIndex}`}>{units[id].text}{unitIndex < exercise.units.length - 1 ? ' ' : ''}</span>)}</span>
+              : 'forms' in exercise
+                ? <PositionalForms exercise={exercise} />
+                : <span className="arabic exercise-arabic" lang="ar" dir="rtl">{exercise.text}</span>}
+            {writing && <DrawingCanvas strokes={drawings[exercise.id]} onChange={strokes => saveDrawing(exercise.id, strokes)} exerciseNumber={i + 1} />}
           </div>
-        </li>)}
+          <div className="exercise-actions">
+            {!writing && <button className="exercise-control sound-control" disabled={audio.status === 'unavailable'} aria-describedby="audio-note" aria-label={`Sound for exercise ${i + 1}: approved audio unavailable`}><span className="round-icon"><Play size={15} fill="currentColor" /></span>Sound</button>}
+            <button className={`exercise-control tick-control ${progress[exercise.id]?.[checkedField] ? 'is-checked' : ''}`} aria-pressed={progress[exercise.id]?.[checkedField] ?? false} aria-label={`Tick ${mode} exercise ${i + 1}`} onClick={() => toggle(exercise.id, mode)}><span className="round-icon"><Check size={19} /></span>{progress[exercise.id]?.[checkedField] ? 'Ticked' : 'Tick'}</button>
+            {writing && <button className="exercise-control clear-control" aria-label={`Clear handwriting for exercise ${i + 1}`} onClick={() => saveDrawing(exercise.id, [])}><span className="round-icon"><RotateCcw size={17} /></span>Clear</button>}
+          </div>
+        </li>})}
       </ol>
-      <p className="sheet-footnote sr-only"><span className="wide-order">Read from right to left, then move to the next row.</span><span className="phone-order">Read down the page, one exercise at a time.</span><span>Separated practice units · Not Quran quotations</span></p>
+      <p className="sheet-footnote sr-only"><span className="wide-order">{positional ? 'Compare forms from right to left within each row, then move down.' : 'Read from right to left, then move to the next row.'}</span><span className="phone-order">{positional ? 'Compare forms from right to left within each row, then move down.' : 'Read down the page, one exercise at a time.'}</span><span>{chapter.number === 3 ? 'Draft joining practice · Shape samples, constructed drills and source-linked words · Teacher review pending' : 'Separated practice units · Not Quran quotations'}</span></p>
     </section>
     <nav className="page-navigation" aria-label="Workbook pages">
       <button className="button button-primary next-page" disabled={index === pages.length - 1} onClick={() => goToPage(index + 1)}><ChevronLeft size={19} /><span>Next Page</span></button>
@@ -141,45 +188,33 @@ function Reader() {
     </nav>
     <label className="page-picker"><span className="sr-only">Choose page</span><select aria-label="Choose page" value={index} onChange={e => goToPage(Number(e.target.value))}>{pages.map((p,i) => <option key={p.id} value={i}>Page {i + 1} of {pages.length}</option>)}</select></label>
     <p className="review-message" role="status">{reviewMessage}</p>
+    {articulation && <ArticulationDialog letter={articulation.letter} trigger={articulation.trigger} onClose={() => setArticulation(null)} />}
   </main>
 }
 
-function Write() {
-  const [params] = useSearchParams()
-  const index = pageIndex(params.get('page'))
-  const page = pages[index]
-  const [formIndex, setFormIndex] = useState(0)
-  const [resetKey, setResetKey] = useState(0)
-  const [announcement, setAnnouncement] = useState('')
-  const form = units[page.eligibleForms[formIndex % page.eligibleForms.length]]
-  return <main id="main" className="paper-frame write-view">
-    <FrameDecoration />
-    <Link className="back-link" to={`/learn?page=${index + 1}`}><ArrowLeft size={18} /> Back to Reading</Link>
-    <header className="write-heading"><p className="eyebrow">Chapter 1 · Page {index + 1}</p><h1 tabIndex={-1}>A moment to write</h1><Divider /><p>Follow the faint form, or try it in your own space.</p></header>
-    <DraftNote />
-    <div className="writing-workspace">
-      <div className="letter-reference"><span className="eyebrow">Reference form</span><span className="arabic" lang="ar" dir="rtl">{form.text}</span><p>{form.label}</p><p className="quiet-note">Draft tracing form<br />No grading. No need to be perfect.</p></div>
-      <DrawingCanvas letter={form.text} resetKey={resetKey} />
-    </div>
-    <div className="write-actions"><button className="button button-paper" onClick={() => { setResetKey(n => n + 1); setAnnouncement('Drawing cleared.') }}><RotateCcw size={18} /> Clear</button><p>Mouse, touch or Apple Pencil</p><button className="button button-primary" onClick={() => { setFormIndex(n => (n + 1) % page.eligibleForms.length); setAnnouncement('Next reference form. Drawing cleared.') }}>Next Letter <ArrowRight size={18} /></button></div>
-    <p className="sr-only" role="status">{announcement}</p>
-    <p className="quiet-note">Drawing is temporary and stays on this screen only.</p>
-  </main>
+// Preserve old bookmarks while moving all practice into the reader.
+function LegacyWriteRedirect() {
+  const location = useLocation()
+  const { setMode } = usePrototype()
+  const chapter = chapterFromParam(new URLSearchParams(location.search).get('chapter'))
+  useLayoutEffect(() => { setMode(chapter.id, 'writing') }, [chapter.id, setMode])
+  return <Navigate to={{ pathname: '/learn', search: location.search, hash: location.hash }} replace />
 }
 
 export function App() {
   const location = useLocation()
   useEffect(() => {
-    const titles: Record<string, string> = { '/': 'One page at a time', '/chapters': 'Choose a chapter', '/learn': 'Chapter 1', '/learn/write': 'Write practice' }
+    const chapter = chapterFromParam(new URLSearchParams(location.search).get('chapter'))
+    const titles: Record<string, string> = { '/': 'One page at a time', '/chapters': 'Choose a chapter', '/learn': `Chapter ${chapter.number}`, '/learn/write': 'Write practice' }
     document.title = `Iqra — ${titles[location.pathname] ?? 'Workbook'}`
     if (location.pathname !== '/learn') {
       window.scrollTo(0, 0)
       document.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
     }
-  }, [location.pathname])
+  }, [location.pathname, location.search])
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <div className="app-shell"><Routes><Route path="/" element={<Landing />} /><Route path="/chapters" element={<Chapters />} /><Route path="/learn" element={<Reader />} /><Route path="/learn/write" element={<Write />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></div>
-    {location.pathname !== '/chapters' && location.pathname !== '/learn' && <footer className="prototype-footer"><span>Iqra · Prototype v0.1</span><span>Unpublished · Temporary local state · Page sounds off</span></footer>}
+    <div className="app-shell"><Routes><Route path="/" element={<Landing />} /><Route path="/chapters" element={<Chapters />} /><Route path="/learn" element={<Reader />} /><Route path="/learn/write" element={<LegacyWriteRedirect />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></div>
+    {location.pathname !== '/chapters' && location.pathname !== '/learn' && <footer className="prototype-footer"><span>e-iqra v0.1</span></footer>}
   </>
 }
