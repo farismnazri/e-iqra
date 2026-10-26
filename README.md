@@ -21,6 +21,16 @@ npm run preview     # Serve the production build locally
 
 The app uses Vite, React, TypeScript, React Router, plain CSS and Lucide icons. Noto Naskh Arabic and Nunito Sans are self-hosted through Fontsource; no external font or audio service is required. No backend, accounts, database or cloud synchronization is configured.
 
+## iPhone Home Screen app
+
+The web manifest and iOS metadata name the app `e-iqra`, launch the homepage in standalone mode, and keep all existing routes within scope. No service worker, offline cache, installation popup or orientation lock is added; a network connection is required. The existing warm canvas colour (`#f2ede4`) is used for the manifest background and theme. The viewport and shell respect iPhone safe areas; dialogs, the footer and the keyboard skip link also account for them.
+
+`public/icons/` contains opaque 180×180 (Apple Touch Icon), 192×192 and 512×512 PNGs derived from the owner's `Warm Minimal E-Iqra Learning Icon.png`. The outer white margin was cropped and the cream paper texture extended into the corners, preserving the central artwork and leaving the device to apply its own icon mask. The original in Downloads is unchanged.
+
+Serve `dist/` at the origin root over HTTPS. The production host must serve existing static files normally and fall back to `index.html` for application paths such as `/chapters`, `/learn` and `/learn/write`, preserving query parameters. React Router uses browser history; a static host without this SPA fallback will return errors for direct links and refreshes. Vite's local preview provides the fallback, but does not configure a deployment host.
+
+On an iPhone, open the site in Safari → Share → Add to Home Screen (leave **Open as Web App** enabled if offered), then launch the new icon. Device verification should check the icon and name, absence of Safari controls, portrait and landscape safe areas, chapter selection, reading, Write/Done, in-app back links, and direct-link/reload behaviour. Check that new Reading/Writing ticks persist after closing and reopening the installed app; Safari and Home Screen storage may be separate, so existing Safari progress must not be assumed to transfer. Handwriting still clears on a full reload.
+
 ## Prototype views
 
 | Route | Behavior |
@@ -44,7 +54,7 @@ Storage uses the `e-iqra.progress` key with schema version 1. Loading validates 
 - Retained exercises keep their original IDs (including historical page prefixes and `v3-eNN` suffixes) when moved between display pages; page positions do not define exercise identity. Confidence state must never be reassigned by exercise position. Curriculum version and unreviewed status are recorded in `src/content.ts`.
 - Reference and tracing forms are explicitly draft/unreviewed. Qualified teacher review and owner approval remain required before educational publication.
 - Sound stays disabled because there are no approved recordings. There is no TTS fallback. Page sounds remain off; no sound assets or toggle are supplied in this version.
-- No account invitation, authentication, admin tools, PWA installation or Chapter 3–6 content is implemented.
+- No account invitation, authentication, admin tools or Chapter 3–6 content is implemented.
 
 Each Chapter 1 two-page cycle keeps both new letters together: Page A starts with six isolated forms (fathah, kasrah, dammah for each letter), followed by four separated three-unit drills. Page B contains ten separated three-unit drills using introduced forms, including the new pair. The existing introduction order is unchanged. Pages 21–22 provide cumulative reading review. Every page has ten exercises; retained drills keep their IDs and new sequences use `v5-eNN` suffixes. Chapter 2 IDs use the separate `draft-ch02-pNN-eNN` namespace; rewritten final-page exercises use `draft-ch02-p09-v2-eNN` so retired review checks and drawings cannot transfer. All curriculum and tracing remain draft/unreviewed.
 
