@@ -1,38 +1,38 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Stroke } from './DrawingCanvas'
 import type { ChapterId } from './chapters'
+import { loadProgress, storeProgress } from './progressStorage'
+import type { WorkbookMode } from './progressStorage'
 
-export type WorkbookMode = 'reading' | 'writing'
-export type ExerciseProgress = { readingChecked: boolean; writingChecked: boolean }
-type ChapterSession = { mode: WorkbookMode; lastPage: number; visited: number[] }
+export type { WorkbookMode, ExerciseProgress } from './progressStorage'
 
 function usePrototypeState() {
-  const [progress, setProgress] = useState<Record<string, ExerciseProgress>>({})
+  // Lazy hydration happens before children render or any persistence effect runs.
+  const [{ progress, sessions }, setLearnerProgress] = useState(loadProgress)
   const [drawings, setDrawings] = useState<Record<string, Stroke[]>>({})
-  const [sessions, setSessions] = useState<Record<ChapterId, ChapterSession>>({
-    'draft-ch01': { mode: 'reading', lastPage: 0, visited: [] },
-    'draft-ch02': { mode: 'reading', lastPage: 0, visited: [] },
-    'draft-ch03': { mode: 'reading', lastPage: 0, visited: [] },
-  })
+  useEffect(() => { storeProgress({ progress, sessions }) }, [progress, sessions])
   const visit = useCallback((chapter: ChapterId, index: number) => {
-    setSessions(previous => {
-      const current = previous[chapter]
-      return { ...previous, [chapter]: {
+    setLearnerProgress(previous => {
+      const current = previous.sessions[chapter]
+      if (current.lastPage === index && current.visited.includes(index)) return previous
+      return { ...previous, sessions: { ...previous.sessions, [chapter]: {
         ...current, lastPage: index,
         visited: current.visited.includes(index) ? current.visited : [...current.visited, index],
-      } }
+      } } }
     })
   }, [])
   const setMode = useCallback((chapter: ChapterId, mode: WorkbookMode) => {
-    setSessions(previous => ({ ...previous, [chapter]: { ...previous[chapter], mode } }))
+    setLearnerProgress(previous => ({ ...previous, sessions: {
+      ...previous.sessions, [chapter]: { ...previous.sessions[chapter], mode },
+    } }))
   }, [])
   const toggle = useCallback((id: string, activeMode: WorkbookMode) => {
     const field = activeMode === 'reading' ? 'readingChecked' : 'writingChecked'
-    setProgress(previous => {
-      const current = previous[id] ?? { readingChecked: false, writingChecked: false }
+    setLearnerProgress(previous => {
+      const current = previous.progress[id] ?? { readingChecked: false, writingChecked: false }
       // Keep deliberate false values; neither mode can overwrite the other's choice.
-      return { ...previous, [id]: { ...current, [field]: !current[field] } }
+      return { ...previous, progress: { ...previous.progress, [id]: { ...current, [field]: !current[field] } } }
     })
   }, [])
   const saveDrawing = useCallback((id: string, strokes: Stroke[]) => {
