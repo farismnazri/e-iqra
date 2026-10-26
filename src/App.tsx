@@ -147,10 +147,13 @@ function ChapterReader({ chapter }: { chapter: Chapter }) {
     <div className="reader-toolbar">
       <Link className="back-link" to="/chapters"><ChevronLeft size={20} /><span>Back to Chapters</span></Link>
       <div className="reader-identity"><h1 id="reader-title" tabIndex={-1}>Chapter {chapter.number}</h1><Divider /></div>
-      <button id="write-action" className="button button-primary write-button" aria-pressed={writing} aria-controls="workbook-sheet" onClick={toggleMode}>{writing ? <Check size={18} /> : <Pencil size={18} />}{writing ? 'Done' : 'Write'}</button>
+      <div className="reader-actions">
+        <label className="page-picker"><span className="sr-only">Choose page</span><select aria-label="Choose page" value={index} onChange={e => goToPage(Number(e.target.value))}>{pages.map((p,i) => <option key={p.id} value={i}>Page {i + 1} of {pages.length}</option>)}</select></label>
+        <button id="write-action" className="button button-primary write-button" aria-pressed={writing} aria-controls="workbook-sheet" onClick={toggleMode}>{writing ? <Check size={18} /> : <Pencil size={18} />}{writing ? 'Done' : 'Write'}</button>
+      </div>
     </div>
     <div className="sr-only"><p>{page.title}. {page.goal}</p><p>Draft curriculum, pending qualified teacher review.</p><p id="audio-note">Approved audio is unavailable. You can still read and tick.</p></div>
-    <p className="sr-only" role="status">{writing ? 'Writing mode. Draft tracing references, not teacher-reviewed. Tick and Clear are independent; handwriting is kept only until reload. Scroll outside the drawing areas.' : 'Reading mode.'}</p>
+    <p className="sr-only" role="status">{writing ? 'Writing mode. Draft tracing references, not teacher-reviewed. Tick and Clear are independent; handwriting is kept only until reload. Draw with a pen or mouse; use fingers to scroll.' : 'Reading mode.'}</p>
     {chapter.number === 3 && <div className="chapter3-note">
       <p>Educational draft · Pending qualified teacher review</p>
       {positional && <p>Compare shapes from right to left. Unvowelled letters are shape references only.</p>}
@@ -186,7 +189,6 @@ function ChapterReader({ chapter }: { chapter: Chapter }) {
       <button className="next-practice" onClick={nextPractice}><BookOpen size={19} /> Go to next practice</button>
       <button className="button button-paper previous-page" disabled={index === 0} onClick={() => goToPage(index - 1)}><span>Previous Page</span><ChevronRight size={19} /></button>
     </nav>
-    <label className="page-picker"><span className="sr-only">Choose page</span><select aria-label="Choose page" value={index} onChange={e => goToPage(Number(e.target.value))}>{pages.map((p,i) => <option key={p.id} value={i}>Page {i + 1} of {pages.length}</option>)}</select></label>
     <p className="review-message" role="status">{reviewMessage}</p>
     {articulation && <ArticulationDialog letter={articulation.letter} trigger={articulation.trigger} onClose={() => setArticulation(null)} />}
   </main>

@@ -57,6 +57,17 @@ export function DrawingCanvas({ strokes = emptyStrokes, onChange, exerciseNumber
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current!
+    // Safari also emits Touch Events for Apple Pencil. Cancel only stylus
+    // gestures there: touch-action permits finger scrolling, but can otherwise
+    // let the browser claim a Pencil stroke as a pan and cancel its pointer.
+    const preventStylusPan = (event: TouchEvent) => {
+      if (Array.from(event.changedTouches).some(touch =>
+        (touch as Touch & { touchType?: string }).touchType === 'stylus')) {
+        event.preventDefault()
+      }
+    }
+    canvas.addEventListener('touchstart', preventStylusPan, { passive: false })
+    canvas.addEventListener('touchmove', preventStylusPan, { passive: false })
     const resize = () => {
       const box = canvas.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
@@ -69,7 +80,12 @@ export function DrawingCanvas({ strokes = emptyStrokes, onChange, exerciseNumber
     const observer = new ResizeObserver(resize)
     observer.observe(canvas)
     window.addEventListener('resize', resize)
-    return () => { observer.disconnect(); window.removeEventListener('resize', resize) }
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', resize)
+      canvas.removeEventListener('touchstart', preventStylusPan)
+      canvas.removeEventListener('touchmove', preventStylusPan)
+    }
   }, [redraw])
 
   function point(event: PointerEvent, canvas: HTMLCanvasElement): Point {
@@ -86,6 +102,8 @@ export function DrawingCanvas({ strokes = emptyStrokes, onChange, exerciseNumber
     redraw()
   }
   function start(event: ReactPointerEvent<HTMLCanvasElement>) {
+    // Fingers scroll without leaving accidental ink; pen and mouse still draw.
+    if (event.pointerType !== 'pen' && event.pointerType !== 'mouse') return
     if (!event.isPrimary || active.current !== null || event.button !== 0) return
     event.preventDefault()
     active.current = event.pointerId
@@ -106,7 +124,7 @@ export function DrawingCanvas({ strokes = emptyStrokes, onChange, exerciseNumber
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
   return <canvas className="exercise-canvas" ref={canvasRef}
-    aria-label={`Writing area for exercise ${exerciseNumber}. Draw with a mouse, touch or pen; use this exercise's Clear button to erase.`}
+    aria-label={`Writing area for exercise ${exerciseNumber}. Draw with a mouse or pen; use fingers to scroll and this exercise's Clear button to erase.`}
     onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}
     onClick={event => event.preventDefault()}>
     Freehand drawing requires a browser with canvas support. The reference and self-check controls remain available.
